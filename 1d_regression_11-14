@@ -1,0 +1,98 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+def fit_trend(year, value):
+    """给定 year 和 value（可包含 NaN），返回：
+       x_fit（用于绘图的平滑年份轴）
+       y_fit（回归预测值）
+       model（sklearn 模型）
+    """
+    # 去掉 NaN
+    mask = ~np.isnan(year) & ~np.isnan(value)
+    x = year[mask].reshape(-1,1)
+    y = value[mask]
+
+    # 拟合线性趋势
+    model = LinearRegression()
+    model.fit(x, y)
+
+    # 生成平滑趋势线
+    x_fit = np.linspace(x.min(), x.max(), 200).reshape(-1,1)
+    y_fit = model.predict(x_fit)
+
+    return x_fit, y_fit, model
+
+
+data = np.loadtxt("maxtemp_ranked_seasonal.txt", skiprows=1, usecols=range(1,11))
+
+winter_value = data[:, 0]
+winter_year  = data[:, 1]
+
+spring_value = data[:, 2]
+spring_year  = data[:, 3]
+
+summer_value = data[:, 4]
+summer_year  = data[:, 5]
+
+autumn_value = data[:, 6]
+autumn_year  = data[:, 7]
+
+annual_value = data[:, 8]
+annual_year  = data[:, 9]
+
+def sort_by_year(value, year):
+    idx = np.argsort(year)
+    return year[idx], value[idx]
+
+winter_year_s, winter_value_s = sort_by_year(winter_value, winter_year)
+spring_year_s, spring_value_s = sort_by_year(spring_value, spring_year)
+summer_year_s, summer_value_s = sort_by_year(summer_value, summer_year)
+autumn_year_s, autumn_value_s = sort_by_year(autumn_value, autumn_year)
+annual_year_s, annual_value_s = sort_by_year(annual_value, annual_year)
+
+# === 线性回归部分（针对 annual）===
+
+# 1. 去掉可能存在的 NaN
+mask = ~np.isnan(annual_year_s) & ~np.isnan(annual_value_s)
+x = annual_year_s[mask].reshape(-1, 1)   # sklearn 要求二维
+y = annual_value_s[mask]
+
+# 2. 拟合线性回归模型
+model = LinearRegression()
+model.fit(x, y)
+
+# 3. 生成回归线（用一个细一点的年份网格画得更平滑）
+x_fit = np.linspace(x.min(), x.max(), 200).reshape(-1, 1)
+y_fit = model.predict(x_fit)
+
+print("regression coefficient(°C / year)：", model.coef_[0])
+print("intercepption：", model.intercept_)
+print("approximate raising rate(°C / 10years)：", model.coef_[0] * 10)
+
+plt.figure(figsize=(12, 7))
+
+seasons = [
+    ("Winter", winter_year_s, winter_value_s),
+    ("Spring", spring_year_s, spring_value_s),
+    ("Summer", summer_year_s, summer_value_s),
+    ("Autumn", autumn_year_s, autumn_value_s),
+    ("Annual", annual_year_s, annual_value_s)
+]
+
+for label, yr, val in seasons:
+    # 原始折线
+    #plt.plot(yr, val, marker='o', label=f"{label}")
+
+    # 趋势线
+    x_fit, y_fit, model = fit_trend(yr, val)
+    plt.plot(x_fit, y_fit, linestyle='--', label=f"{label} trend")
+
+plt.xlabel("Year")
+plt.ylabel("Temperature (°C)")
+plt.title("Britain Seasonal Temperatures + Linear Trends")
+plt.ylim(5,24)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
